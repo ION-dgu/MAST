@@ -1,5 +1,4 @@
 from abc import abstractmethod
-from functools import partial
 import math
 from typing import Iterable
 
@@ -81,21 +80,11 @@ class TimestepEmbedSequential(nn.Sequential, TimestepBlock):
                 x,
                 emb,
                 context=None,
-                self_attn_q_injected=None,
-                self_attn_k_injected=None,
-                self_attn_v_injected=None,
-                ## 마스크 적용
+                self_attn_cnt_q_injected=None,
                 self_attn_cnt_k_injected=None,
-                self_attn_sty_q_injected=None,
                 self_attn_cnt_v_injected=None,
-                ## 2개의 스타일 인젝션
-                self_attn_sty2_q_injected=None,
-                self_attn_sty2_k_injected=None,
-                self_attn_sty2_v_injected=None,
-                # N-style 확장용: style2 이후 스타일 k/v 리스트
-                self_attn_extra_style_k_injected_list=None,
-                self_attn_extra_style_v_injected_list=None,
-
+                self_attn_style_k_injected_list=None,
+                self_attn_style_v_injected_list=None,
                 out_layers_injected=None,
                 injection_config=None):
         for layer in self:
@@ -106,24 +95,14 @@ class TimestepEmbedSequential(nn.Sequential, TimestepBlock):
             elif isinstance(layer, SpatialTransformer):
                 x = layer(x,
                           context,
-                          self_attn_q_injected,
-                          self_attn_k_injected,
-                          self_attn_v_injected,
-                          ## 마스크 적용
+                          self_attn_cnt_q_injected,
                           self_attn_cnt_k_injected,
-                          self_attn_sty_q_injected,
                           self_attn_cnt_v_injected,
-                          ## 2개의 스타일 인젝션
-                          self_attn_sty2_q_injected,
-                          self_attn_sty2_k_injected,
-                          self_attn_sty2_v_injected,
-                          self_attn_extra_style_k_injected_list,
-                          self_attn_extra_style_v_injected_list,
-
+                          self_attn_style_k_injected_list,
+                          self_attn_style_v_injected_list,
                           injection_config,)
             else:
                 x = layer(x)
-        #self.stored_output = x
         return x
 
 
@@ -325,14 +304,14 @@ class ResBlock(TimestepBlock):
                 h = h + emb_out
                 h = self.out_layers(h)
             self.out_layers_features = h
-            self.out_skip = self.skip_connection(x).clone() # skip 저장
-            self.out_h = h.clone() # h저장
+            self.out_skip = self.skip_connection(x).clone()
+            self.out_h = h.clone()
             self.out_merged = self.skip_connection(x) + h
             self.skip = self.skip_connection(x).detach()
             
         return self.out_merged
-        
-        ## 원본  
+
+        # Original path:
         # return self.skip_connection(x) + h
 
 
@@ -761,15 +740,6 @@ class UNetModel(nn.Module):
             conv_nd(dims, model_channels, n_embed, 1),
             #nn.LogSoftmax(dim=1)  # change to cross_entropy and produce non-normalized logits
         )
-    def move_feat_maps_to_device(self, feat_maps, device):
-        for i, f in enumerate(feat_maps):
-            if isinstance(f, dict):
-                for k, v in f.items():
-                    if th.is_tensor(v):
-                        f[k] = v.to(device)
-            elif th.is_tensor(f):
-                feat_maps[i] = f.to(device)
-        return feat_maps
     def convert_to_fp16(self):
         """
         Convert the torso of the model to float16.
@@ -820,140 +790,69 @@ class UNetModel(nn.Module):
         h = self.middle_block(h, emb, context)
 
         module_i = 0
-        ## residual injection
-        #residual_dict = {}  # 추가: residual 저장용
-        layer_index = 0
         for module in self.output_blocks:
-            for submodule in module.modules():
-                if hasattr(submodule, "layer_index"):
-                    submodule.layer_index = module_i  # 현재 모듈의 인덱스 전달
-            layer_index += 1
-            self_attn_q_injected = None
-            self_attn_k_injected = None
-            self_attn_v_injected = None
-            ## 마스크 적용
-            self_attn_cnt_k_injected= None
-            self_attn_sty_q_injected = None
+            self_attn_cnt_q_injected = None
+            self_attn_cnt_k_injected = None
             self_attn_cnt_v_injected = None
+            self_attn_style_k_injected_list = None
+            self_attn_style_v_injected_list = None
 
-            ## 2개의 스타일 인젝션
-            self_attn_sty2_q_injected = None
-            self_attn_sty2_k_injected = None
-            self_attn_sty2_v_injected = None
-            # N-style 확장용: style2 이후 스타일 k/v를 리스트로 전달합니다.
-            self_attn_extra_style_k_injected_list = None
-            self_attn_extra_style_v_injected_list = None
-            
             out_layers_injected = None
             injection_config = None
-            q_feature_key = f'output_block_{module_i}_self_attn_q'
-            k_feature_key = f'output_block_{module_i}_self_attn_k'
-            v_feature_key = f'output_block_{module_i}_self_attn_v'
+            cnt_q_feature_key = f'output_block_{module_i}_self_attn_q_cnt'
             cnt_k_feature_key = f'output_block_{module_i}_self_attn_k_cnt'
-            sty_q_feature_key = f'output_block_{module_i}_self_attn_q_sty'
             cnt_v_feature_key = f'output_block_{module_i}_self_attn_v_cnt'
-            ## 2개의 스타일 인젝션
-            sty2_q_feature_key = f'output_block_{module_i}_self_attn_q_sty2'
-            sty2_k_feature_key = f'output_block_{module_i}_self_attn_k_sty2'
-            sty2_v_feature_key = f'output_block_{module_i}_self_attn_v_sty2'
-            ## 여기에 out_layers_injected 추가
             out_layers_feature_key = f'output_block_{module_i}_out_layers'
-            t_scale_key = f'output_block_{module_i}_self_attn_s' # Tau
             config_key = f'config'
 
-            if injected_features is not None and q_feature_key in injected_features:
-                self_attn_q_injected = injected_features[q_feature_key].to(h.device)
-
-            if injected_features is not None and k_feature_key in injected_features:
-                self_attn_k_injected = injected_features[k_feature_key].to(h.device)
-
-            if injected_features is not None and v_feature_key in injected_features:
-                self_attn_v_injected = injected_features[v_feature_key].to(h.device)
+            if injected_features is not None and cnt_q_feature_key in injected_features:
+                self_attn_cnt_q_injected = injected_features[cnt_q_feature_key].to(h.device)
 
             if injected_features is not None and out_layers_feature_key in injected_features:
                 out_layers_injected = injected_features[out_layers_feature_key].to(h.device)
 
-            ## 마스크 적용
             if injected_features is not None and cnt_k_feature_key in injected_features:
                 self_attn_cnt_k_injected = injected_features[cnt_k_feature_key].to(h.device)
-            
-            if injected_features is not None and sty_q_feature_key in injected_features:
-                self_attn_sty_q_injected = injected_features[sty_q_feature_key].to(h.device)
-            
+
             if injected_features is not None and cnt_v_feature_key in injected_features:
                 self_attn_cnt_v_injected = injected_features[cnt_v_feature_key].to(h.device)
 
-            ## 2개의 스타일 인젝션
-            if injected_features is not None and sty2_q_feature_key in injected_features:
-                self_attn_sty2_q_injected = injected_features[sty2_q_feature_key].to(h.device)
-            
-            if injected_features is not None and sty2_k_feature_key in injected_features:
-                self_attn_sty2_k_injected = injected_features[sty2_k_feature_key].to(h.device)
-
-            if injected_features is not None and sty2_v_feature_key in injected_features:
-                self_attn_sty2_v_injected = injected_features[sty2_v_feature_key].to(h.device)
-                
             if injected_features is not None:
                 injection_config = injected_features[config_key]
-                self.move_feat_maps_to_device(injection_config, h.device)
-                if t_scale_key in injected_features:
-                    injection_config['T'] = injected_features[t_scale_key].to(h.device)
-
-                # N-style 확장:
-                # style1은 기존 기본 k/v 키를 사용하고, style2 이후는 _sty{idx} 키를 동적으로 수집합니다.
                 num_styles = int(injection_config.get("num_styles", 0))
-                if num_styles >= 2:
-                    self_attn_extra_style_k_injected_list = []
-                    self_attn_extra_style_v_injected_list = []
-                    for style_idx in range(2, num_styles + 1):
+                if num_styles >= 1:
+                    self_attn_style_k_injected_list = []
+                    self_attn_style_v_injected_list = []
+                    for style_idx in range(1, num_styles + 1):
                         style_k_key = f'output_block_{module_i}_self_attn_k_sty{style_idx}'
                         style_v_key = f'output_block_{module_i}_self_attn_v_sty{style_idx}'
+                        style_k_tensor = (
+                            injected_features[style_k_key].to(h.device)
+                            if style_k_key in injected_features else None
+                        )
+                        style_v_tensor = (
+                            injected_features[style_v_key].to(h.device)
+                            if style_v_key in injected_features else None
+                        )
 
-                        # 일부 레이어/타임스텝에 값이 없을 수 있으므로 None을 유지해 순서를 보존합니다.
-                        style_k_tensor = injected_features[style_k_key].to(h.device) if style_k_key in injected_features else None
-                        style_v_tensor = injected_features[style_v_key].to(h.device) if style_v_key in injected_features else None
-
-                        self_attn_extra_style_k_injected_list.append(style_k_tensor)
-                        self_attn_extra_style_v_injected_list.append(style_v_tensor)
-                    
-                
+                        self_attn_style_k_injected_list.append(style_k_tensor)
+                        self_attn_style_v_injected_list.append(style_v_tensor)
 
             h = th.cat([h, hs.pop()], dim=1)
-            
-            # (2) 여기에 residual 저장
-            # if module_i in range(3,9):  # 3,4,5,6,7,8
-            #     residual_key = f"output_block_{module_i}_residual"
-            #     if self.save_residuals:  # save_residuals는 인자로 받아야 함 or 클래스 attr로 추가
-            #         residual_dict[residual_key] = h.detach().cpu()
-            #         print(f"[ResidualExtraction] Saved {residual_key} shape: {h.shape}")
 
-            h = module(h,
-                       emb,
-                       context,
-                       self_attn_q_injected=self_attn_q_injected,
-                       self_attn_k_injected=self_attn_k_injected,
-                       self_attn_v_injected=self_attn_v_injected,
-                       out_layers_injected=out_layers_injected,
-                       ## 여기도 마스크
-                       self_attn_cnt_k_injected=self_attn_cnt_k_injected,
-                       self_attn_sty_q_injected=self_attn_sty_q_injected,
-                       self_attn_cnt_v_injected=self_attn_cnt_v_injected,
-                       ## 2개의 스타일 인젝션
-                       self_attn_sty2_q_injected=self_attn_sty2_q_injected,
-                       self_attn_sty2_k_injected=self_attn_sty2_k_injected,
-                       self_attn_sty2_v_injected=self_attn_sty2_v_injected,
-                       self_attn_extra_style_k_injected_list=self_attn_extra_style_k_injected_list,
-                       self_attn_extra_style_v_injected_list=self_attn_extra_style_v_injected_list,
-                       
-                       injection_config=injection_config,)
+            h = module(
+                h,
+                emb,
+                context,
+                self_attn_cnt_q_injected=self_attn_cnt_q_injected,
+                out_layers_injected=out_layers_injected,
+                self_attn_cnt_k_injected=self_attn_cnt_k_injected,
+                self_attn_cnt_v_injected=self_attn_cnt_v_injected,
+                self_attn_style_k_injected_list=self_attn_style_k_injected_list,
+                self_attn_style_v_injected_list=self_attn_style_v_injected_list,
+                injection_config=injection_config,
+            )
             module_i += 1
-
-        # if self.save_residuals and self.residual_save_path is not None:
-        #     import pickle, os
-        #     os.makedirs(os.path.dirname(self.residual_save_path), exist_ok=True)
-        #     with open(self.residual_save_path, 'wb') as f:
-        #         pickle.dump(residual_dict, f)
-        #     print(f"[ResidualExtraction] Saved all residuals to {self.residual_save_path}")
         
         h = h.type(x.dtype)
         if self.predict_codebook_ids:

@@ -19,10 +19,9 @@ from ldm.models.diffusion.ddim import DDIMSampler
 
 feat_maps = []
 
-# 이미지 파일 탐색 시 사용하는 확장자 목록입니다.
+
 VALID_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".webp"}
 
-# run_ori.py와 동일한 해상도 정책을 사용해야 precomputed feature shape가 정확히 맞음.
 SUPPORTED_INFERENCE_HW = {
     (512, 512),
     (512, 768),
@@ -38,8 +37,11 @@ SUPPORTED_INFERENCE_HW = {
 
 def resolve_runtime_resolution(opt, model_config):
     """
-    실행 해상도(H, W)를 model_config 기본값 + CLI override 규칙으로 결정.
-    generate_pkl_only.py와 run_ori.py가 반드시 같은 규칙을 써야 함.
+    Resolve the runtime image size `(H, W)` from the model defaults plus CLI
+    overrides.
+
+    `generate_pkl_only.py` and `run_ori.py` must use the exact same rule to
+    avoid precomputed feature shape mismatches.
     """
     cfg_h, cfg_w = None, None
     if model_config is not None and "inference" in model_config:
@@ -59,22 +61,24 @@ def resolve_runtime_resolution(opt, model_config):
 
 def validate_runtime_resolution(h, w, f):
     """
-    지원 해상도 조합과 latent downsampling 계수(f) 정합성 검사.
+    Validate the supported runtime resolution list and latent downsampling
+    factor `f`.
     """
     if (h, w) not in SUPPORTED_INFERENCE_HW:
         raise ValueError(
-            f"지원하지 않는 해상도 조합입니다: ({h}, {w}). "
-            f"지원 해상도: {sorted(SUPPORTED_INFERENCE_HW)}"
+            f"Unsupported runtime resolution: ({h}, {w}). "
+            f"Supported resolutions: {sorted(SUPPORTED_INFERENCE_HW)}"
         )
     if h % f != 0 or w % f != 0:
-        raise ValueError(f"H/W는 f={f}의 배수여야 합니다. 현재 H={h}, W={w}, f={f}")
+        raise ValueError(f"H and W must be divisible by f={f}. Received H={h}, W={w}, f={f}")
 
 
 def get_resolution_scoped_precomputed_dir(base_dir, h, w):
     """
-    feature pkl 저장 경로 규칙:
-    - 512x512: 기존 실험 자산과 호환되도록 base_dir 그대로 사용
-    - 그 외 지원 해상도: {base_dir}/{H}x{W} 하위 폴더 사용
+    Resolve the feature-pkl output directory by runtime resolution.
+
+    - `512x512`: keep the legacy layout and use `base_dir` directly.
+    - Other supported resolutions: use `{base_dir}/{H}x{W}`.
     """
     if (h, w) == (512, 512):
         return base_dir
@@ -83,11 +87,12 @@ def get_resolution_scoped_precomputed_dir(base_dir, h, w):
 
 def resize_tensor_hw(x, target_h, target_w, mode="bilinear"):
     """
-    4D tensor(B, C, H, W)를 target_h x target_w로 resize합니다.
-    crop 대신 resize를 사용하여 전체 이미지를 유지합니다.
+    Resize a 4D tensor `(B, C, H, W)` to `target_h x target_w`.
+
+    Resize is used instead of cropping so the full image layout is preserved.
     """
     if x.ndim != 4:
-        raise ValueError(f"resize_tensor_hw는 4D tensor만 지원합니다. 현재 shape={tuple(x.shape)}")
+        raise ValueError(f"resize_tensor_hw only supports 4D tensors. Received shape={tuple(x.shape)}")
 
     if mode in {"bilinear", "bicubic", "trilinear", "linear"}:
         return F.interpolate(x, size=(target_h, target_w), mode=mode, align_corners=False)
@@ -98,8 +103,6 @@ def load_img(path, target_h=512, target_w=512):
     image = Image.open(path).convert("RGB")
     x, y = image.size
     print(f"Loaded input image of size ({x}, {y}) from {path}")
-    # crop 없이 최종 실행 해상도(H, W)로 바로 resize합니다.
-    # (이미지 전체 구도를 유지하고 크기만 변경하려는 정책)
     image = image.resize((target_w, target_h), resample=Image.Resampling.LANCZOS)
     image = np.array(image).astype(np.float32) / 255.0
     image = image[None].transpose(0, 3, 1, 2)
@@ -111,9 +114,10 @@ def load_img(path, target_h=512, target_w=512):
 
 def list_image_paths(folder, recursive=False):
     """
-    지정한 폴더에서 이미지 파일 경로를 수집합니다.
-    - recursive=True: 하위 폴더까지 모두 탐색 (style 폴더용)
-    - recursive=False: 현재 폴더만 탐색 (기본)
+    Collect image file paths from a folder.
+
+    - `recursive=True`: traverse all nested subdirectories (used for styles)
+    - `recursive=False`: scan only the current directory
     """
     if not folder or not os.path.isdir(folder):
         return []
@@ -164,7 +168,7 @@ def main():
     parser.add_argument('--save_feat_steps', type=int, default=50, help='DDIM eta')
     parser.add_argument('--start_step', type=int, default=49)
     parser.add_argument('--ddim_eta', type=float, default=0.0)
-    # CLI에서 생략되면 model_config의 inference 기본값을 사용.
+    # If omitted on the CLI, use the inference defaults from `model_config`.
     parser.add_argument('--H', type=int, default=None)
     parser.add_argument('--W', type=int, default=None)
     parser.add_argument('--C', type=int, default=4)
@@ -172,7 +176,6 @@ def main():
     parser.add_argument("--attn_layer", type=str, default='6,7,8,9,10,11', help='injection attention feature layers')
     parser.add_argument('--model_config', type=str, default='models/ldm/stable-diffusion-v1/v1-inference.yaml')
     parser.add_argument('--precomputed', type=str, default='./precomputed_feats_k')
-    #parser.add_argument('--precomputed', type=str, default='./precomputed_feats_k')
     parser.add_argument('--ckpt', type=str, default='models/ldm/stable-diffusion-v1/model.ckpt')
     parser.add_argument('--precision', type=str, default='autocast', help='choices: ["full", "autocast"]')
     parser.add_argument("--seed", default=22, type=int)
@@ -183,7 +186,7 @@ def main():
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
     model_config = OmegaConf.load(opt.model_config)
-    # run_ori.py와 동일한 규칙으로 해상도를 결정해야 pkl shape mismatch를 피할 수 있음.
+    # Use the same resolution rule as `run_ori.py` to avoid pkl shape mismatches.
     opt.H, opt.W = resolve_runtime_resolution(opt, model_config)
     validate_runtime_resolution(opt.H, opt.W, opt.f)
     print(f"Runtime resolution for precompute: H={opt.H}, W={opt.W}")
@@ -199,8 +202,6 @@ def main():
     for name, module in unet_model.named_modules():
         if module.__class__.__name__ == "CrossAttention":
             module.gen_pkl = True
-            # 현재 스크립트는 gen_pkl 모드에서 주로 동작하지만, 동일 모델 객체를 재사용할 수 있으므로
-            # 직사각형 기준 latent 해상도도 함께 주입해 둡니다.
             module.base_latent_hw = (opt.H // opt.f, opt.W // opt.f)
             print(f"Set gen_pkl=True for {name}")
 
@@ -219,7 +220,7 @@ def main():
         time_idx_dict[i] = t
     
     global feat_maps
-    # 이미지마다 동일한 버퍼 템플릿을 재사용하기 위해 길이를 현재 DDIM step 수에 맞춰 생성합니다.
+    # Rebuild the per-image buffer with the current DDIM schedule length.
     def reset_feat_maps_buffer():
         global feat_maps
         feat_maps = [{'config': {'T': 1.5}} for _ in range(len(time_range))]
@@ -258,7 +259,7 @@ def main():
         feat_maps[cur_idx][name] = xt.detach().cpu()
 
     def residual_injection_callback(pred_x0, xt, t):
-        # feature map 저장
+        # Save feature maps captured during inversion.
         save_feature_maps_callback(t)
         save_feature_map_z(xt, 'z_enc', t)
 
@@ -271,29 +272,16 @@ def main():
                 break
 
             for module in reversed(unet_model.output_blocks[block_id]):
-                if module.__class__.__name__.endswith("ResBlock"):
-                    # if hasattr(module, 'out_skip') and module.out_skip is not None:
-                    #     skip = module.out_skip.detach().cpu()
-                    #     #skip_hf = high_pass_filter(skip, radius=6)
-                    #     key_skip = f"output_block_{block_id}_cnt_skip"
-                    #     residuals_all[t_int][key_skip] = skip
-                    #     print(f"[Callback] t={t_int}, saved {key_skip}")
+                if module.__class__.__name__.endswith("ResBlock"):               
 
                     if hasattr(module, 'out_h') and module.out_h is not None:
                         h = module.out_h.detach().cpu()
-                        #h_hf = high_pass_filter(h, radius=6)
                         key_h = f"output_block_{block_id}_cnt_h"
                         save_feature_map(h, f"{key_h}", t_int)
-                        #feat_maps[t_int][f"{key_h}"] = h
-                        # residuals_all[t_int][key_h] = h
                         print(f"[Callback] t={t_int}, saved {key_h}")
+                 
 
-                    # if hasattr(module, 'out_merged') and module.out_merged is not None:
-                    #     key_full = f"output_block_{block_id}_residual"
-                    #     residuals_all[t_int][key_full] = module.out_merged.detach().cpu()
-                    #     print(f"[Callback] t={t_int}, saved {key_full}")
-
-                    break  # 마지막 ResBlock만 처리
+                    break  # Only process the final ResBlock.
 
                     
     start_step = opt.start_step
@@ -302,15 +290,16 @@ def main():
     shape = [opt.C, opt.H // opt.f, opt.W // opt.f]
 
     # ==========================
-    # content/style precompute 대상 경로 결정
+    # Resolve the content/style folders used for precomputation.
     # ==========================
-    # --cnt/--sty를 지정하면 해당 경로를 우선 사용하고,
-    # 미지정 시에는 data_root 기준 기본 폴더를 사용합니다.
+    # If `--cnt/--sty` is provided, use those folders first.
+    # Otherwise, fall back to the default folders under `data_root`.
     cnt_folder = opt.cnt if opt.cnt is not None else os.path.join(opt.data_root, "cnt")
     sty_folder = opt.sty if opt.sty is not None else os.path.join(opt.data_root, "sty")
 
-    # content는 보통 cnt 폴더 바로 아래에 있으므로 기본은 비재귀,
-    # style은 char/back/extra 등 하위 폴더 구성을 지원하기 위해 재귀 탐색합니다.
+    # Content images usually live directly under `cnt`, so the default scan is
+    # non-recursive. Styles are scanned recursively to support layouts such as
+    # `char/`, `back/`, or other nested style groups.
     cnt_image_paths = list_image_paths(cnt_folder, recursive=False)
     sty_image_paths = list_image_paths(sty_folder, recursive=True)
 
@@ -319,8 +308,9 @@ def main():
     if not sty_image_paths:
         print(f"[Info] No style images found in: {sty_folder}")
 
-    # basename 기반으로 pkl 이름을 만들기 때문에, 서로 다른 파일이 같은 basename이면 덮어쓰기됩니다.
-    # run_ori.py도 basename 기준으로 찾으므로 여기서 명시적으로 잡아주는 편이 안전합니다.
+    # Pkl file names are built from basenames, so different files with the same
+    # basename would overwrite each other. `run_ori.py` also resolves by
+    # basename, so it is safer to reject collisions explicitly here.
     seen_output_to_source = {}
 
     # ===== STYLE FEATURE ( *_sty.pkl ) =====
@@ -333,7 +323,7 @@ def main():
         prev_src = seen_output_to_source.get(sty_feat_name)
         if prev_src is not None and os.path.abspath(prev_src) != os.path.abspath(sty_path):
             raise ValueError(
-                f"Style basename 충돌로 동일 pkl 경로가 겹칩니다:\n"
+                f"Style basename collision detected for the same pkl path:\n"
                 f" - {prev_src}\n - {sty_path}\n"
                 f" -> {sty_feat_name}"
             )
@@ -343,7 +333,7 @@ def main():
             print(f"Precomputed style feature exists: {sty_feat_name}")
             continue
 
-        # 이미지마다 feature 버퍼를 초기화해야 이전 이미지의 잔여 키가 섞이지 않습니다.
+        # Reset the feature buffer for each image so stale keys do not leak in.
         reset_feat_maps_buffer()
         init_sty = load_img(sty_path, target_h=opt.H, target_w=opt.W).to(device)
         init_sty_latent = model.get_first_stage_encoding(model.encode_first_stage(init_sty))
@@ -359,7 +349,6 @@ def main():
             pickle.dump(copy.deepcopy(feat_maps), f)
         print(f"Saved style feature: {sty_feat_name}")
 
-    # ===== CONTENT FEATURE ( *_cnt.pkl ) =====
     for cnt_path in cnt_image_paths:
         cnt_name = os.path.basename(cnt_path)
         cnt_feat_name = os.path.join(
@@ -369,7 +358,7 @@ def main():
         prev_src = seen_output_to_source.get(cnt_feat_name)
         if prev_src is not None and os.path.abspath(prev_src) != os.path.abspath(cnt_path):
             raise ValueError(
-                f"Content basename 충돌로 동일 pkl 경로가 겹칩니다:\n"
+                f"Content basename collision detected for the same pkl path:\n"
                 f" - {prev_src}\n - {cnt_path}\n"
                 f" -> {cnt_feat_name}"
             )

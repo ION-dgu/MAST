@@ -5,7 +5,7 @@ from functools import partial
 import torch.nn.functional as F
 
 # before filter
-def high_freq_filter(h, radius_ratio=0.5):
+def high_freq_filter(h, radius_ratio=0.3):
     orig_dtype = h.dtype
     h = h.to(torch.float32)
 
@@ -34,7 +34,7 @@ def make_content_injection_schedule(ddim_timesteps, start_idx=0, end_idx=50):
     return ddim_timesteps[start_idx : end_idx]
 
 
-def patch_decoder_resblocks_h_and_cnt_hf(unet, schedule, residuals_all, ratio=0.5):
+def patch_decoder_resblocks_h_and_cnt_hf(unet, schedule, residuals_all, ratio=0.3):
     def move_feat_maps_to_device(feat_maps, device):
         for i, f in enumerate(feat_maps):
             if isinstance(f, dict):
@@ -75,7 +75,6 @@ def patch_decoder_resblocks_h_and_cnt_hf(unet, schedule, residuals_all, ratio=0.
             
             if h_cnt is not None:
                 if ratio == 0:
-                    
                     out_res = self.out_skip + self.out_h
                 else:
                     h_cnt_hf = high_freq_filter(h_cnt, radius_ratio=ratio)

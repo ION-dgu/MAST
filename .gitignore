@@ -1,4 +1,6 @@
 precomputed_feats_k/
+appendix_512/precomputed/
+appendix_512/runcheck_outputs/
 
 models/ldm/stable-diffusion-v1/model.ckpt
 saved_qk/*.pkl

@@ -103,8 +103,6 @@ class DDIMSampler(object):
                start_step=9999,
                
             
-               sty_name=None,
-               cnt_name=None,
                # this has to come in the same format as the conditioning, # e.g. as encoded tokens, ...,
                **kwargs
                ):
@@ -146,9 +144,6 @@ class DDIMSampler(object):
                                                     style_guidance=style_guidance,
                                                     content_guidance=content_guidance,
                                                     start_step=start_step,
-                                                    
-                                                    sty_name=sty_name,
-                                                    cnt_name=cnt_name,
                                                     )
         return samples, intermediates
 
@@ -162,9 +157,6 @@ class DDIMSampler(object):
                       injected_features=None, callback_ddim_timesteps=None,
                       negative_prompt_alpha=1.0, negative_prompt_schedule='constant',
                       style_img=None,style_guidance=1.,content_guidance=1.,start_step=9999,
-                     
-                      sty_name=None,
-                      cnt_name=None,
                       ):
         device = self.model.betas.device
         b = shape[0]
