@@ -16,3 +16,9 @@ __pycache__/
 sam_weights/
 home/
 man/
+
+# Keep appendix_512 sample inputs versioned for the public repo.
+!appendix_512/cnt/
+!appendix_512/cnt/**
+!appendix_512/sty/
+!appendix_512/sty/**
