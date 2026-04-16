@@ -40,6 +40,16 @@ Download <a href='https://huggingface.co/CompVis/stable-diffusion-v-1-4-original
 
 ---
 
+## Environment Setup
+
+We recommend using a Conda environment.
+
+```bash
+conda env create -f environment.yaml
+conda activate acmmm_mast
+
+---
+
 ## Data Preparation
 
 A typical data layout is:
