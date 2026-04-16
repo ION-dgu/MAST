@@ -22,15 +22,15 @@ from ldm.models.diffusion.ddim import DDIMSampler
 
 from ldm.modules.attention import CrossAttention
 try:
-    from ACMMM_MAST.ddi import patch_decoder_resblocks_h_and_cnt_hf, make_content_injection_schedule
+    from ddi import patch_decoder_resblocks_h_and_cnt_hf, make_content_injection_schedule
 except ImportError:
     from ddi import patch_decoder_resblocks_h_and_cnt_hf, make_content_injection_schedule
 
 process = psutil.Process()
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_DATA_ROOT = os.path.join(SCRIPT_DIR, "data_vis")
-DEFAULT_PRECOMPUTED_DIR = os.path.join(SCRIPT_DIR, "precomputed_feats_k")
-DEFAULT_OUTPUT_DIR = os.path.join(SCRIPT_DIR, "output_dk")
+DEFAULT_DATA_ROOT = os.path.join(SCRIPT_DIR, "data")
+DEFAULT_PRECOMPUTED_DIR = os.path.join(SCRIPT_DIR, "precomputed_feats")
+DEFAULT_OUTPUT_DIR = os.path.join(SCRIPT_DIR, "output")
 DEFAULT_MODEL_CONFIG = os.path.join(SCRIPT_DIR, "models/ldm/stable-diffusion-v1/v1-inference.yaml")
 DEFAULT_CKPT = os.path.join(SCRIPT_DIR, "models/ldm/stable-diffusion-v1/model.ckpt")
 DEFAULT_META_FILE = "nstyle_meta.txt"

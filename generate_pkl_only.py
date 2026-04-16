@@ -175,11 +175,11 @@ def main():
     parser.add_argument('--f', type=int, default=8)
     parser.add_argument("--attn_layer", type=str, default='6,7,8,9,10,11', help='injection attention feature layers')
     parser.add_argument('--model_config', type=str, default='models/ldm/stable-diffusion-v1/v1-inference.yaml')
-    parser.add_argument('--precomputed', type=str, default='./precomputed_feats_k')
+    parser.add_argument('--precomputed', type=str, default='data/precomputed_feats')
     parser.add_argument('--ckpt', type=str, default='models/ldm/stable-diffusion-v1/model.ckpt')
     parser.add_argument('--precision', type=str, default='autocast', help='choices: ["full", "autocast"]')
     parser.add_argument("--seed", default=22, type=int)
-    parser.add_argument('--data_root', type=str, default='./data_vis')
+    parser.add_argument('--data_root', type=str, default='./data')
     opt = parser.parse_args()
 
     seed_everything(opt.seed)
