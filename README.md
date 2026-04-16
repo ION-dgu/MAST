@@ -46,7 +46,7 @@ We recommend using a Conda environment.
 
 ```bash
 conda env create -f environment.yaml
-conda activate acmmm_mast
+conda activate mast
 ```
 
 
