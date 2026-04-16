@@ -1,0 +1,33 @@
+name: acmmm_mast
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.8
+  - pip
+  - pytorch=1.11.0
+  - torchvision=0.12.0
+  - cudatoolkit=11.3
+  - pip:
+      - albumentations==0.4.3
+      - einops==0.3.0
+      - ftfy==6.2.3
+      - huggingface-hub==0.34.4
+      - kornia==0.6.0
+      - lpips==0.1.4
+      - numpy==1.24.4
+      - omegaconf==2.1.1
+      - opencv-python==4.13.0.92
+      - packaging==25.0
+      - Pillow==10.4.0
+      - psutil==7.1.0
+      - pytorch-lightning==1.4.2
+      - regex==2024.11.6
+      - requests==2.32.4
+      - safetensors==0.5.3
+      - scikit-learn==1.1.1
+      - scipy==1.9.1
+      - tokenizers==0.13.3
+      - tqdm==4.67.1
+      - transformers==4.33.2
