@@ -308,7 +308,43 @@ class CrossAttention(nn.Module):
         return adjusted
 
     def _apply_groupwise_temperature(self, cat_sim, cc_sim):
-        """Apply the existing polynomial head-wise temperature adjustment."""
+        """
+        Apply Sharpness-aware Temperature Scaling (STS).
+
+        STS is proposed to address the degradation of attention sharpness caused by:
+        1) Low correlation between content-style queries and style keys → flattened logits
+        2) Concatenation of multiple partitions → increased softmax denominator → reduced contrast
+
+        ------------------------------------------------------------
+        Core idea:
+        Instead of using a fixed temperature (as in StyleID),
+        we adaptively compute temperature τ per head based on sharpness.
+
+        Sharpness is measured using:
+            log p_max = max(logits) - logsumexp(logits)
+
+        We define the sharpness gap:
+            Δ = log p_max(content logits) - log p_max(concatenated logits)
+
+        Interpretation:
+        - Δ ↑ → concatenation made distribution flatter → need larger τ
+        - Δ ↓ → already sharp → small τ is sufficient
+
+        ------------------------------------------------------------
+        Implementation:
+        - Compute Δ per head
+        - Map Δ → τ using a polynomial fit:
+            τ = aΔ² + bΔ + c
+        - Apply temperature scaling:
+            τ * (logits - mean) + mean
+
+        NOTE:
+        - Mean is preserved to maintain group-wise normalization stability
+        - τ is clipped to prevent over-sharpening
+
+        This restores attention sharpness and improves stylization fidelity.
+        """
+
         H, _, _ = cat_sim.shape
 
         def log_pmax(logits, dim=-1):
@@ -316,18 +352,28 @@ class CrossAttention(nn.Module):
             lse = torch.logsumexp(logits, dim=dim, keepdim=True)
             return (max_logit - lse).squeeze(dim)
 
+        # Sharpness of content-only attention
         logp_cc = log_pmax(cc_sim)
+
+        # Sharpness after concatenating style + content
         logp_cat = log_pmax(cat_sim)
+
+        # Δ: sharpness gap (per head)
         delta_head = (logp_cc - logp_cat).mean(dim=1)
 
+        # Polynomial mapping Δ → τ (fitted offline)
         a1 = 0.08395199
         b2 = 0.43704639
         c3 = 1.00998177
 
         tau = a1 * delta_head**2 + b2 * delta_head + c3
+
+        # Prevent extreme scaling
         tau = torch.clamp(tau, min=1.0, max=5.0).view(H, 1, 1)
 
+        # Preserve mean while scaling variance (important!)
         mean = cat_sim.mean(dim=-1, keepdim=True)
+
         return tau * (cat_sim - mean) + mean
 
     def _forward_standard_attention(self, q, k, v, h, mask=None, attn_matrix_scale=1.0, apply_attn_scale=False):
@@ -460,6 +506,11 @@ class CrossAttention(nn.Module):
                     style_weight_maps=style_weight_maps,
                     pi_style_total=pi_style_total,
                 )
+                # Concatenate style and content logits:
+                #   ℓ_concat = [ℓ_cs^(1), ..., ℓ_cs^(N), ℓ_c]
+                #
+                # LAMA → controls attention mass (global allocation)
+                # STS  → restores sharpness after concatenation
                 cat_sim = self._apply_groupwise_temperature(torch.cat(style_sims + [cc_sim], dim=2), cc_sim)
                 cat_v = torch.cat(style_v_branches + [v_content], dim=1)
                 cat_attn = cat_sim.softmax(dim=-1)

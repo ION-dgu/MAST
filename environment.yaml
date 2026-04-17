@@ -23,6 +23,9 @@ dependencies:
       - Pillow==10.4.0
       - psutil==7.1.0
       - pytorch-lightning==1.4.2
+      - torchmetrics==0.6.0  # pytorch-lightning==1.4.2 imports get_num_classes from this API line
+      - -e ./src/clip  # local CLIP package used by ldm.modules.encoders
+      - -e ./src/taming-transformers  # local `taming` package used by ldm imports
       - regex==2024.11.6
       - requests==2.32.4
       - safetensors==0.5.3

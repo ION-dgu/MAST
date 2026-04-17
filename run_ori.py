@@ -1,4 +1,5 @@
 import copy
+import difflib
 import gc
 import os
 import pickle
@@ -34,6 +35,7 @@ DEFAULT_OUTPUT_DIR = os.path.join(SCRIPT_DIR, "output")
 DEFAULT_MODEL_CONFIG = os.path.join(SCRIPT_DIR, "models/ldm/stable-diffusion-v1/v1-inference.yaml")
 DEFAULT_CKPT = os.path.join(SCRIPT_DIR, "models/ldm/stable-diffusion-v1/model.ckpt")
 DEFAULT_META_FILE = "nstyle_meta.txt"
+IMAGE_EXTENSION_FALLBACKS = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
 
 # Keep the allowed inference resolutions explicit.
 # Expanding the official benchmark set should only require editing this table.
@@ -165,49 +167,99 @@ def resolve_meta_path(data_root, meta_file):
     return os.path.join(data_root, meta_file)
 
 
-def _resolve_content_token_path(data_root, token):
+def _resolve_image_token_path(data_root, token, canonical_prefix):
     """
-    Resolve a content token from the canonical meta format.
+    Resolve a token to an actual image path under the current repo layout.
 
-    Supported forms:
-    - `content_001.jpg` -> `{data_root}/cnt/content_001.jpg`
-    - `cnt/content_001.jpg` -> `{data_root}/cnt/content_001.jpg`
-    - absolute path -> unchanged
+    Meta files in this repo use bare filenames such as `content_020.png` and
+    `style_001.png`, while the actual files live under `data/cnt` and
+    `data/sty` and may use a different extension.
     """
     if os.path.isabs(token):
         return token
-    if token.startswith("cnt/"):
-        return os.path.join(data_root, token)
-    return os.path.join(data_root, "cnt", token)
+
+    normalized = token.replace("\\", "/")
+    if normalized.startswith(f"{canonical_prefix}/"):
+        rel_token = normalized[len(canonical_prefix) + 1 :]
+        rel_candidates = [normalized]
+    else:
+        rel_token = normalized
+        rel_candidates = [os.path.join(canonical_prefix, normalized)]
+
+    stem, ext = os.path.splitext(rel_token)
+    for fallback_ext in IMAGE_EXTENSION_FALLBACKS:
+        if fallback_ext != ext.lower():
+            rel_candidates.append(os.path.join(canonical_prefix, stem + fallback_ext))
+
+    seen_candidates = set()
+    for rel_path in rel_candidates:
+        candidate = os.path.join(data_root, rel_path)
+        if candidate in seen_candidates:
+            continue
+        seen_candidates.add(candidate)
+        if os.path.isfile(candidate):
+            return candidate
+
+    rel_dir = os.path.dirname(rel_token)
+    search_dir = os.path.join(data_root, canonical_prefix, rel_dir)
+    if os.path.isdir(search_dir):
+        token_stem = os.path.splitext(os.path.basename(rel_token))[0].lower()
+        fuzzy_matches = []
+
+        for entry in sorted(os.listdir(search_dir)):
+            entry_path = os.path.join(search_dir, entry)
+            if not os.path.isfile(entry_path):
+                continue
+
+            entry_stem, entry_ext = os.path.splitext(entry)
+            if entry_ext.lower() not in IMAGE_EXTENSION_FALLBACKS:
+                continue
+
+            ratio = difflib.SequenceMatcher(None, token_stem, entry_stem.lower()).ratio()
+            if ratio >= 0.84:
+                fuzzy_matches.append((ratio, entry_path))
+
+        if fuzzy_matches:
+            fuzzy_matches.sort(key=lambda item: (-item[0], item[1]))
+            best_ratio, best_path = fuzzy_matches[0]
+            if len(fuzzy_matches) == 1 or fuzzy_matches[1][0] < best_ratio:
+                print(
+                    f"[meta] Resolved image token '{token}' to "
+                    f"'{os.path.relpath(best_path, data_root)}' using fuzzy filename match."
+                )
+                return best_path
+
+    raise FileNotFoundError(
+        f"Could not resolve image token '{token}' under '{data_root}/{canonical_prefix}'. "
+        f"Tried: {rel_candidates}"
+    )
+
+
+def _resolve_content_token_path(data_root, token):
+    """
+    Resolve a content token from the repo's current meta format.
+
+    Supported forms:
+    - `content_001.jpg` -> `{data_root}/cnt/content_001.jpg`
+    - `content_001.png` -> `{data_root}/cnt/content_001.jpg` if that file exists
+    - `cnt/content_001.jpg` -> `{data_root}/cnt/content_001.jpg`
+    - absolute path -> unchanged
+    """
+    return _resolve_image_token_path(data_root, token, "cnt")
 
 
 def _resolve_style_token_path(data_root, token):
     """
-    Resolve a style token from the canonical meta format.
+    Resolve a style token from the repo's current meta format.
 
     Supported forms:
     - absolute path
+    - `style_001.png` -> `{data_root}/sty/style_001.jpg` if that file exists
     - `sty/...` relative to `data_root`
     - explicit subpaths such as `char/...` or `back/...`, resolved under
       `{data_root}/sty`
-
-    Plain filenames are intentionally rejected so the official runtime contract
-    stays explicit and order-independent.
     """
-    if os.path.isabs(token):
-        return token
-
-    if token.startswith("sty/"):
-        return os.path.join(data_root, token)
-
-    if "/" in token:
-        return os.path.join(data_root, "sty", token)
-
-    raise ValueError(
-        "Style tokens must be explicit paths such as 'sty/foo.jpg', "
-        "'char/foo.jpg', or an absolute path. "
-        f"Received '{token}'."
-    )
+    return _resolve_image_token_path(data_root, token, "sty")
 
 
 def parse_multistyle_meta_samples(data_root, meta_file):

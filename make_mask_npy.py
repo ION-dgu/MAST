@@ -3,8 +3,6 @@ import cv2
 import os
 import argparse
 
-IMG_EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".webp")
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--mask_dir", type=str, required=True, help="Path to directory containing mask images")
@@ -21,7 +19,9 @@ def main():
 
 
     for fname in os.listdir(mask_dir):
-        if not fname.lower().endswith(IMG_EXTENSIONS):
+        if not fname.lower().endswith(".png"):
+            continue
+        if "_mask" not in os.path.splitext(fname)[0]:
             continue
 
         mask_path = os.path.join(mask_dir, fname)

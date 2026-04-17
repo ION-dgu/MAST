@@ -35,6 +35,17 @@ SUPPORTED_INFERENCE_HW = {
 }
 
 
+def is_mask_image(fname):
+    """
+    Skip per-content mask files such as `content_020_mask0.png`.
+
+    The pkl precompute step should only run on real content/style images, not
+    on the auxiliary mask PNGs stored alongside them.
+    """
+    base_name, ext = os.path.splitext(fname.lower())
+    return ext == ".png" and "_mask" in base_name
+
+
 def resolve_runtime_resolution(opt, model_config):
     """
     Resolve the runtime image size `(H, W)` from the model defaults plus CLI
@@ -126,6 +137,8 @@ def list_image_paths(folder, recursive=False):
     if recursive:
         for root, _, files in os.walk(folder):
             for name in files:
+                if is_mask_image(name):
+                    continue
                 ext = os.path.splitext(name)[1].lower()
                 if ext in VALID_IMAGE_EXTENSIONS:
                     image_paths.append(os.path.join(root, name))
@@ -133,6 +146,8 @@ def list_image_paths(folder, recursive=False):
         for name in os.listdir(folder):
             path = os.path.join(folder, name)
             if not os.path.isfile(path):
+                continue
+            if is_mask_image(name):
                 continue
             ext = os.path.splitext(name)[1].lower()
             if ext in VALID_IMAGE_EXTENSIONS:
