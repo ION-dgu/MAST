@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="description"
+        content="We presented MAST, a mask-based multi-style transfer framework that explicitly controls the interaction between content and multiple styles within the diffusion attention mechanism.">
+  <meta name="keywords" content="MAST, Style Transfer, Multi-Style, Masked Stylization, Diffusion Models">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MAST: Mask-Guided Attention Mass Allocation for Training-Free Multi-Style Transfer</title>
+
+  <!-- 필요 없으면 삭제 -->
+  <!--
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-PYVRSFMDRL"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() {
+      dataLayer.push(arguments);
+    }
+    gtag('js', new Date());
+    gtag('config', 'G-PYVRSFMDRL');
+  </script>
+  -->
+
+  <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro"
+        rel="stylesheet">
+
+  <link rel="stylesheet" href="./static/css/bulma.min.css">
+  <link rel="stylesheet" href="./static/css/fontawesome.all.min.css">
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
+  <link rel="stylesheet" href="./static/css/index.css">
+  <link rel="icon" href="./static/images/vg_sn.svg">
+
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script defer src="./static/js/fontawesome.all.min.js"></script>
+  <script defer src="./static/js/index.js"></script>
+</head>
+<body>
+
+<nav class="mast-navbar">
+  <div class="mast-navbar-inner">
+    <button id="mast-menu-toggle" class="mast-menu-toggle" aria-label="Toggle menu">
+      ☰
+    </button>
+
+    <div id="mast-menu" class="mast-menu">
+      <a class="mast-menu-item" href="#overview">Overview</a>
+      <a class="mast-menu-item" href="#abstract">Abstract</a>
+      <a class="mast-menu-item" href="#results">Results</a>
+      <a class="mast-menu-item" href="#BibTeX">BibTeX</a>
+    </div>
+  </div>
+</nav>
+
+  <!-- TITLE / AUTHORS -->
+  <section class="mast">
+    <div class="mast-body">
+      <div class="container is-max-desktop">
+        <div class="columns is-centered">
+          <div class="column has-text-centered">
+
+            <h1 class="title is-2 publication-title">
+              MAST: Mask-Guided Attention Mass Allocation<br>
+              for Training-Free Multi-Style Transfer
+            </h1>
+
+            <div class="is-size-5 publication-authors">
+              <span class="author-block">
+                <a href="https://kangdongkyung.github.io/dk-homepage/">Dongkyung Kang</a><sup>*</sup>,
+              </span>
+              <span class="author-block">
+                <a href="https://khwwang.github.io/Website/">Jaeyeon Hwang</a><sup>*</sup>,
+              </span>
+              <span class="author-block">
+                <a href="https://qkrwnstj306.github.io/">Junseo Park</a><sup>*</sup>,
+              </span>
+              <span class="author-block">
+                <a href="https://mimj3816.github.io/min_zi/">Minji Kang</a><sup>*</sup>,
+              </span>
+              <span class="author-block">
+                <a href="https://yrlee040212.github.io/">Yeryeong Lee</a><sup>*</sup>,
+              </span>
+              <br>
+
+              <span class="author-block">
+                Beomseok Ko,
+              </span>
+              <span class="author-block">
+                <a href="https://hanyoungsss.github.io/hanyoung-website/">Hanyoung Roh</a>,
+              </span>
+              <span class="author-block">
+                Jeongmin Shin,
+              </span>
+              <span class="author-block">
+                <a href="https://sites.google.com/view/d-ion-lab">Hyeryung Jang</a><sup>†</sup>
+              </span>
+            </div>
+
+
+            <div class="is-size-6" style="margin-top: 1rem;">
+              <span>* These authors contributed equally.</span><br>
+              <span>† Corresponding author</span>
+            </div>
+
+            <br>
+
+            <div class="is-size-5 publication-authors">
+              <span class="author-block">Division of Computer Science and Artificial Intelligence, Dongguk University</span><br>
+
+            </div>
+
+            <div class="column has-text-centered">
+              <div class="publication-links">
+                <span class="link-block">
+                  <a href="https://arxiv.org/pdf/2604.12281"
+                     class="external-link button is-normal is-rounded is-dark">
+                    <span class="icon">
+                      <i class="fas fa-file-pdf"></i>
+                    </span>
+                    <span>Paper</span>
+                  </a>
+                </span>
+
+                <span class="link-block">
+                  <a href="https://arxiv.org/abs/2604.12281"
+                     class="external-link button is-normal is-rounded is-dark">
+                    <span class="icon">
+                      <i class="ai ai-arxiv"></i>
+                    </span>
+                    <span>arXiv</span>
+                  </a>
+                </span>
+
+                <span class="link-block">
+                  <a href="https://github.com/ION-dgu/MAST"
+                     class="external-link button is-normal is-rounded is-dark">
+                    <span class="icon">
+                      <i class="fab fa-github"></i>
+                    </span>
+                    <span>Code</span>
+                  </a>
+                </span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TEASER -->
+  <section class="mast teaser">
+    <div class="container is-max-desktop">
+      <div class="mast-body">
+        <img id="teaser" src="./static/images/app_ours_fig.jpg" alt="MAST teaser image">
+        <h2 class="subtitle has-text-centered">
+          Robustness of our method across 1-style to 4-style settings with varying aspect ratios and resolutions from 512 to 1024
+          (<span style="color: #47FF15;">green</span>: background)
+        </h2>
+      </div>
+    </div>
+  </section>
+
+  <!-- OVERVIEW -->
+  <section class="section" id="overview">
+    <div class="container is-max-desktop">
+      <h2 class="title is-3 has-text-centered">Overview</h2>
+
+      <div class="content has-text-centered">
+        <img src="./static/paper_final_fig/overview_fig.png" alt="Overview figure" style="max-width: 100%; height: auto;">
+      </div>
+
+      <div class="content has-text-justified">
+        <p>
+          Overview of the proposed <b>MAST</b> framework. (Left) The stylized pipeline employs DDIM inversion and AdaIN-based
+          initialization, where style is injected through attention modulation during the denoising process. (Right) Our attention control
+          framework comprises four core modules: LQA anchors the semantic layout using content queries; LAMA achieves precise
+          region-wise control via logit-level mass allocation; STS restores stylistic focus by sharpening the attention distribution; and
+          DDI preserves structural fidelity by injecting high-frequency content details.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ABSTRACT -->
+  <section class="section" id="abstract">
+    <div class="container is-max-desktop">
+      <div class="columns is-centered has-text-centered">
+        <div class="column is-four-fifths">
+          <h2 class="title is-3">Abstract</h2>
+          <div class="content has-text-justified">
+            <p>
+              Style transfer aims to render a content image with the visual characteristics of a reference style while preserving its underlying semantic layout and structural geometry. While recent diffusion-based
+              models demonstrate strong stylization capabilities by leveraging
+              powerful generative priors and controllable internal representations, they typically assume a single global style. Extending them
+              to multi-style scenarios often leads to boundary artifacts, unstable stylization, and structural inconsistency due to interference
+              between multiple style representations.
+            </p>
+            <p>
+              To overcome these limitations, we propose <b>MAST</b> (Mask-Guided Attention Mass Allocation for Training-Free Multi-Style Transfer), a novel training-free
+              framework that explicitly controls content-style interactions within
+              the diffusion attention mechanism. To achieve artifact-free and
+              structure-preserving stylization, <b>MAST</b> integrates four connected
+              modules.
+            </p>
+            <p>
+              First, Layout-preserving Query Anchoring prevents global
+              layout collapse by firmly anchoring the semantic structure using
+              content queries. Second, Logit-level Attention Mass Allocation deterministically distributes attention probability mass across spatial
+              regions, seamlessly fusing multiple styles without boundary artifacts. Third, Sharpness-aware Temperature Scaling restores the
+              attention sharpness degraded by multi-style expansion. Finally,
+              Discrepancy-aware Detail Injection adaptively compensates for localized high-frequency detail losses by measuring structural discrepancies.
+              Extensive experiments demonstrate that <b>MAST</b> effectively
+              mitigates boundary artifacts and maintains structural consistency,
+              preserving texture fidelity and spatial coherence even as the number
+              of applied styles increases.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RESULTS -->
+  <section class="section" id="results">
+    <div class="container is-max-desktop">
+      <h2 class="title is-3 has-text-centered">Results</h2>
+
+      <div class="content has-text-centered">
+        <img src="./static/images/main_ours_fig.jpg" style="max-width: 100%;" alt="Main results">
+        <p class="is-size-6">
+          Styles are sequentially added (top to bottom) within a fixed five-style mask setting. <b>MAST</b> ensures strict spatial
+          adherence to mask boundaries and prevents inter-style interference even as stylistic complexity increases. Throughout the
+          progression, our method consistently maintains high-fidelity object structures and seamless transitions between diverse styles.
+        </p>
+      </div>
+
+      <div class="content has-text-centered" style="margin-top: 2rem;">
+        <img src="./static/images/app_bo_crop_fig.jpg" style="max-width: 100%;" alt="Comparison results">
+        <p class="is-size-6">
+          Comparison with strong baselines in the 2-style setting (<span style="color: #47FF15;">green</span>: background). Zoomed-in views of the reference style
+          images and the corresponding stylized regions highlight how faithfully each method transfers local style attributes, such as
+          texture patterns and color tones. Our method better preserves the characteristic style details of each reference while producing
+          more coherent stylization results.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- BIBTEX -->
+  <section class="section" id="BibTeX">
+    <div class="container is-max-desktop content">
+      <h2 class="title">BibTeX</h2>
+      <pre><code>@article{mast2026,
+  author    = {Author names here},
+  title     = {MAST: Mask-Guided Attention Mass Allocation for Training-Free Multi-Style Transfer},
+  journal   = {Conference / Journal name},
+  year      = {2026},
+}</code></pre>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="container">
+      <div class="content has-text-centered">
+        <a class="icon-link" href="./static/pdf/MAST.pdf">
+          <i class="fas fa-file-pdf"></i>
+        </a>
+        <a class="icon-link" href="https://github.com/ION-dgu/MAST">
+          <i class="fab fa-github"></i>
+        </a>
+      </div>
+
+      <div class="columns is-centered">
+        <div class="column is-8">
+          <div class="content has-text-centered">
+            This page was adapted from
+            <a href="https://github.com/nerfies/nerfies.github.io">this</a>
+            source code.
+          </div>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>
