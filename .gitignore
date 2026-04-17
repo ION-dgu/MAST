@@ -5,9 +5,6 @@ appendix_512/runcheck_outputs/
 models/ldm/stable-diffusion-v1/model.ckpt
 saved_qk/*.pkl
 saved_sim/*.pkl
-data/cnt_eval/*.jpg
-data/cnt_eval/*.png
-data/
 *.jpg
 *.png
 *.npy
@@ -22,3 +19,7 @@ man/
 !appendix_512/cnt/**
 !appendix_512/sty/
 !appendix_512/sty/**
+!data/cnt/
+!data/cnt/**
+!data/sty/
+!data/sty/**
